@@ -1,10 +1,13 @@
 #include <algorithm>
 #include <chrono>
 #include <memory>
+#include <vector>
 #include <iostream>
 #include <random>
 
 using namespace std::chrono;
+
+using std::vector;
 
 const int TestSeconds = 2;
 
@@ -12,63 +15,141 @@ typedef unsigned int uint;
 
 typedef std::linear_congruential_engine<uint, 48271, 0, 2147483647> minstd_rand;
 
-void initialize(uint *s, int n, minstd_rand &rand)
+void initialize(vector<uint> &v, minstd_rand &rand)
 {
-	for (int i = 0; i < n; ++i)
+	for (uint &elem : v)
 	{
-		s[i] = rand();
+		elem = rand() % v.size();
 	}
 }
 
 // find values from s2 which are not in s1 and copy to dif, return the number of values found
-int naiveSearchForNew(uint *dif, const uint *s1, const uint *s2, int n)
+size_t naiveSearchForNew(vector<uint> &dif, const vector<uint> &s1, const vector<uint> &s2)
 {
-	int difCount = 0;
-	for (int is2 = 0; is2 < n; ++is2)
+	for (uint e2 : s2)
 	{
-		bool found = false;
-		uint findWhat = s2[is2];
-		for (int is1 = 0; is1 < n; ++is1)
+		if (std::find(s1.cbegin(), s1.cend(), e2) == s1.cend())
 		{
-			if (s1[is1] == findWhat)
-			{
-				found = true;
-				break;
-			}
-		} // for is1
-		if (!found)
-		{
-			dif[difCount++] = findWhat;
+			dif.push_back(e2);
 		}
 	} // for is2
-	return difCount;
+	return dif.size();
+}
+
+// find values from s2 which are not in s1 and copy to dif, return the number of values found
+size_t fasterSearchForNew(vector<uint> &dif, const vector<uint> &_s1, const vector<uint> &_s2)
+{
+	size_t n2 = _s2.size();
+	if (n2 == 0)
+	{
+		return 0;
+	}
+	vector<uint> s2(_s2);
+	std::sort(s2.begin(), s2.end());
+	size_t n1 = _s1.size();
+	if (n1 == 0)
+	{
+		dif = s2;
+		return n2;
+	}
+	vector<uint> s1(_s1);
+	std::sort(s1.begin(), s1.end());
+	size_t i1 = 0, i2 = 0;
+	uint cur1 = s1[0];
+	uint cur2 = s2[0];
+	bool endOf1 = false;
+	bool endOf2 = false;
+	bool move1, move2;
+	do
+	{
+		if (cur1 == cur2)
+		{
+			move1 = !endOf1;
+			move2 = !endOf2;
+		}
+		else
+		{
+			move1 = false;
+			move2 = false;
+			if (cur1 < cur2)
+			{
+				if (!endOf1)
+				{
+					move1 = true;
+				}
+				else if (!endOf2) // endOf1 && !endOf2: can copy the rest actually
+				{
+					dif.push_back(cur2);
+					move2 = true;
+				}
+			}
+			else // cur1 > cur2
+			{
+				if (!endOf2)
+				{
+					if ((i1 == 0) || (s1[i1 - 1] < cur2))
+					{
+						dif.push_back(cur2);
+					}
+					move2 = true;
+				}
+			}
+		}
+		if (move1)
+		{
+			if (++i1 < n1)
+			{
+				cur1 = s1[i1];
+			}
+			else
+			{
+				endOf1 = true;
+			}
+		}
+		if (move2)
+		{
+			if (++i2 < n2)
+			{
+				cur2 = s2[i2];
+			}
+			else
+			{
+				endOf2 = true;
+			}
+		}
+	}
+	while (move1 || move2);
+	return dif.size();
 }
 
 static void test(int n, minstd_rand &rand)
 {
-	std::unique_ptr<uint[]> ps1(new uint[n]);
-	std::unique_ptr<uint[]> ps2(new uint[n]);
-	std::unique_ptr<uint[]> pdif(new uint[n]);
-	uint *s1 = ps1.get();
-	uint *s2 = ps2.get();
-	uint *dif = pdif.get();
+	vector<uint> s1(n);
 
-	initialize(s1, n, rand);
-	std::copy(s1, s1 + n, s2); // VS 2015 generates error C4996 if _SCL_SECURE_NO_WARNINGS not defined
-	int checkDifCount = 0;
+	initialize(s1, rand);
+
+	vector<uint> s2(s1);
+
 	for (int j = 2; j < n; j += n / 3)
 	{
 		s2[j] = (s2[j] < std::numeric_limits<uint>::max()) ? (s2[j] + 1) : 0;
-		++checkDifCount;
 	}
 
-	int difCount;
+	vector<uint> dif;
+	dif.reserve(n / 2);
+
+	size_t difCount;
 	int counter = 0;
 	double timePassed;
+
+	int checkDifCount = naiveSearchForNew(dif, s1, s2);
+
 	steady_clock::time_point start = steady_clock::now();
 	do
 	{
-		difCount = naiveSearchForNew(dif, s1, s2, n);
+		dif.clear();
+//		difCount = naiveSearchForNew(dif, s1, s2);
+		difCount = fasterSearchForNew(dif, s1, s2);
 		if (difCount != checkDifCount)
 		{
 			std::cerr << "check failed!" << std::endl;
@@ -78,25 +159,23 @@ static void test(int n, minstd_rand &rand)
 		++counter;
 	}
 	while (timePassed < TestSeconds);
-/*
-	std::cout << "Values from S2 not in S1: (";
-	for (int i = 0; i < difCount; ++i)
-	{
-		if (i > 0)
-		{
-			std::cout << " ";
-		}
-		std::cout << dif[i];
-	}
-	std::cout << ")" << std::endl;
-*/
-	std::cout << "Number of searches per second (n=" << n << "): " << counter << std::endl;
+
+	std::cout << "One search time (n=" << n << "): " << timePassed / counter << " sec" << std::endl;
 }
 
 void lesson1()
 {
 	minstd_rand rand;
-	for (int i = 10; i <= 10000; i *= 10)
+/*
+	rand.seed(123);
+	vector<uint> s1 = { 30, 3, 3 };
+	vector<uint> s2 = { 2, 3, 6, 7 };
+	vector<uint> dif;
+	size_t n = fasterSearchForNew(dif, s1, s2);
+	std::cout << n << "\n";
+*/
+	const int sizes[] = { 10, 20, 50, 100, 200, 500, 1000, 2000, 3000, 5000, 10000, 15000, 20000, 25000, 50000 };
+	for (int i : sizes)
 	{
 		rand.seed(123);
 		test(i, rand);
