@@ -2,6 +2,7 @@
 #include <chrono>
 #include <memory>
 #include <vector>
+#include <unordered_set>
 #include <iostream>
 #include <random>
 
@@ -37,7 +38,7 @@ size_t naiveSearchForNew(vector<uint> &dif, const vector<uint> &s1, const vector
 }
 
 // find values from s2 which are not in s1 and copy to dif, return the number of values found
-size_t fasterSearchForNew(vector<uint> &dif, const vector<uint> &_s1, const vector<uint> &_s2)
+size_t fasterSearchForNew1(vector<uint> &dif, const vector<uint> &_s1, const vector<uint> &_s2)
 {
 	size_t n2 = _s2.size();
 	if (n2 == 0)
@@ -122,6 +123,20 @@ size_t fasterSearchForNew(vector<uint> &dif, const vector<uint> &_s1, const vect
 	return dif.size();
 }
 
+// find values from s2 which are not in s1 and copy to dif, return the number of values found
+size_t fasterSearchForNew2(vector<uint> &dif, const vector<uint> &_s1, const vector<uint> &_s2)
+{
+	std::unordered_set<uint> set1(_s1.cbegin(), _s1.cend());
+	for (uint elem : _s2)
+	{
+		if (set1.find(elem) == set1.cend())
+		{
+			dif.push_back(elem);
+		}
+	}
+	return dif.size();
+}
+
 static void test(int n, minstd_rand &rand)
 {
 	vector<uint> s1(n);
@@ -142,14 +157,16 @@ static void test(int n, minstd_rand &rand)
 	int counter = 0;
 	double timePassed;
 
-	int checkDifCount = naiveSearchForNew(dif, s1, s2);
+//	size_t checkDifCount = naiveSearchForNew(dif, s1, s2);
+	size_t checkDifCount = fasterSearchForNew2(dif, s1, s2);
 
 	steady_clock::time_point start = steady_clock::now();
 	do
 	{
 		dif.clear();
-//		difCount = naiveSearchForNew(dif, s1, s2);
-		difCount = fasterSearchForNew(dif, s1, s2);
+		difCount = naiveSearchForNew(dif, s1, s2);
+//		difCount = fasterSearchForNew1(dif, s1, s2);
+//		difCount = fasterSearchForNew2(dif, s1, s2);
 		if (difCount != checkDifCount)
 		{
 			std::cerr << "check failed!" << std::endl;
@@ -171,10 +188,10 @@ void lesson1()
 	vector<uint> s1 = { 30, 3, 3 };
 	vector<uint> s2 = { 2, 3, 6, 7 };
 	vector<uint> dif;
-	size_t n = fasterSearchForNew(dif, s1, s2);
+	size_t n = fasterSearchForNew1(dif, s1, s2);
 	std::cout << n << "\n";
 */
-	const int sizes[] = { 10, 20, 50, 100, 200, 500, 1000, 2000, 3000, 5000, 10000, 15000, 20000, 25000, 50000 };
+	const int sizes[] = { 10, 20, 50, 100, 200, 500, 1000, 2000, 3000, 5000, 10000, 15000, 20000, 25000, 50000, 75000, 100000 };
 	for (int i : sizes)
 	{
 		rand.seed(123);
