@@ -1,10 +1,11 @@
 #include <algorithm>
 #include <chrono>
-#include <memory>
-#include <vector>
-#include <unordered_set>
+#include <iterator>
 #include <iostream>
+#include <memory>
 #include <random>
+#include <unordered_set>
+#include <vector>
 
 using namespace std::chrono;
 
@@ -33,12 +34,12 @@ size_t naiveSearchForNew(vector<uint> &dif, const vector<uint> &s1, const vector
 		{
 			dif.push_back(e2);
 		}
-	} // for is2
+	}
 	return dif.size();
 }
 
 // find values from s2 which are not in s1 and copy to dif, return the number of values found
-size_t fasterSearchForNew1(vector<uint> &dif, const vector<uint> &_s1, const vector<uint> &_s2)
+size_t sortAndCompareSearchForNew(vector<uint> &dif, const vector<uint> &_s1, const vector<uint> &_s2)
 {
 	size_t n2 = _s2.size();
 	if (n2 == 0)
@@ -78,22 +79,23 @@ size_t fasterSearchForNew1(vector<uint> &dif, const vector<uint> &_s1, const vec
 				{
 					move1 = true;
 				}
-				else if (!endOf2) // endOf1 && !endOf2: can copy the rest actually
+				else if (!endOf2) // endOf1 && !endOf2: can copy the rest of s2 and stop
 				{
-					dif.push_back(cur2);
-					move2 = true;
+					std::copy(s2.begin() + i2, s2.end(), std::back_inserter(dif));
+					break;
 				}
 			}
 			else // cur1 > cur2
 			{
-				if (!endOf2)
+				if (endOf2)
 				{
-					if ((i1 == 0) || (s1[i1 - 1] < cur2))
-					{
-						dif.push_back(cur2);
-					}
-					move2 = true;
+					break;
 				}
+				if ((i1 == 0) || (s1[i1 - 1] < cur2))
+				{
+					dif.push_back(cur2);
+				}
+				move2 = true;
 			}
 		}
 		if (move1)
@@ -124,49 +126,34 @@ size_t fasterSearchForNew1(vector<uint> &dif, const vector<uint> &_s1, const vec
 }
 
 // find values from s2 which are not in s1 and copy to dif, return the number of values found
-size_t fasterSearchForNew2(vector<uint> &dif, const vector<uint> &_s1, const vector<uint> &_s2)
+size_t hashTableSearchForNew(vector<uint> &dif, const vector<uint> &s1, const vector<uint> &s2)
 {
-	std::unordered_set<uint> set1(_s1.cbegin(), _s1.cend());
-	for (uint elem : _s2)
+	std::unordered_set<uint> set1(s1.cbegin(), s1.cend());
+/*	for (uint elem : s2)
 	{
 		if (set1.find(elem) == set1.cend())
 		{
 			dif.push_back(elem);
 		}
-	}
+	}*/
+	std::copy_if(s2.cbegin(), s2.cend(), std::back_inserter(dif),
+		[&set1](uint s2elem) { return (set1.find(s2elem) == set1.cend()); });
 	return dif.size();
 }
 
-static void test(int n, minstd_rand &rand)
+// returns actual time passed and searchFunc run counter
+std::pair<double, size_t> test(
+	vector<uint> &dif, const vector<uint> &s1, const vector<uint> &s2, size_t checkDifCount,
+	size_t searchFunc(vector<uint> &, const vector<uint> &, const vector<uint> &))
 {
-	vector<uint> s1(n);
-
-	initialize(s1, rand);
-
-	vector<uint> s2(s1);
-
-	for (int j = 2; j < n; j += n / 3)
-	{
-		s2[j] = (s2[j] < std::numeric_limits<uint>::max()) ? (s2[j] + 1) : 0;
-	}
-
-	vector<uint> dif;
-	dif.reserve(n / 2);
-
 	size_t difCount;
-	int counter = 0;
+	size_t counter = 0;
 	double timePassed;
-
-//	size_t checkDifCount = naiveSearchForNew(dif, s1, s2);
-	size_t checkDifCount = fasterSearchForNew2(dif, s1, s2);
-
 	steady_clock::time_point start = steady_clock::now();
 	do
 	{
 		dif.clear();
-		difCount = naiveSearchForNew(dif, s1, s2);
-//		difCount = fasterSearchForNew1(dif, s1, s2);
-//		difCount = fasterSearchForNew2(dif, s1, s2);
+		difCount = searchFunc(dif, s1, s2);
 		if (difCount != checkDifCount)
 		{
 			std::cerr << "check failed!" << std::endl;
@@ -176,8 +163,57 @@ static void test(int n, minstd_rand &rand)
 		++counter;
 	}
 	while (timePassed < TestSeconds);
+	return std::pair<double, size_t>(timePassed, counter);
+}
 
-	std::cout << "One search time (n=" << n << "): " << timePassed / counter << " sec" << std::endl;
+static void test(size_t n, minstd_rand &rand)
+{
+	std::cout << "N=" << n << std::endl;
+
+	vector<uint> s1(n);
+
+	initialize(s1, rand);
+
+	vector<uint> s2(s1);
+
+	// make some differences
+	for (int j = 2; j < n; j += n / 3)
+	{
+		s2[j] = (s2[j] < std::numeric_limits<uint>::max()) ? (s2[j] + 1) : 0;
+	}
+
+	vector<uint> dif;
+	dif.reserve(n); // no reallocation will occur
+
+	size_t checkDifCount1 = naiveSearchForNew(dif, s1, s2);
+	dif.clear();
+	size_t checkDifCount2 = hashTableSearchForNew(dif, s1, s2);
+
+	std::cout << "Do naive search..." << std::endl;
+	std::pair<double, size_t> naive = test(dif, s1, s2, checkDifCount2, naiveSearchForNew);
+
+	std::cout << "Do sort and compare search..." << std::endl;
+	std::pair<double, size_t> sortAndCompare = test(dif, s1, s2, checkDifCount1, sortAndCompareSearchForNew);
+
+	std::cout << "Do hash table search..." << std::endl;
+	std::pair<double, size_t> hashTable = test(dif, s1, s2, checkDifCount1, hashTableSearchForNew);
+
+	double naiveSearchTime = naive.first / naive.second;
+	double sortAndCompareTime = sortAndCompare.first / sortAndCompare.second;
+	double hashTableTime = hashTable.first / hashTable.second;
+	std::cout << "Naive search time (one run): " << naiveSearchTime << " sec" << std::endl;
+	std::cout << "Sort and compare time (one run): " << sortAndCompareTime << " sec" << std::endl;
+	std::cout << "Hash table search time (one run): " << hashTableTime << " sec" << std::endl;
+	const double MinTime = 1E-12;
+	if (sortAndCompareTime > MinTime) // protecting from divide by zero, overflow, etc.
+	{
+		std::cout << "Naive to sort and compare search time: " << naiveSearchTime / sortAndCompareTime << std::endl;
+	}
+	if (hashTableTime > MinTime)
+	{
+		std::cout << "Naive to hash table search time: " << naiveSearchTime / hashTableTime << std::endl;
+		std::cout << "Sort and compare to hash table search time: " << sortAndCompareTime / hashTableTime << std::endl;
+	}
 }
 
 void lesson1()
@@ -185,16 +221,16 @@ void lesson1()
 	minstd_rand rand;
 /*
 	rand.seed(123);
-	vector<uint> s1 = { 30, 3, 3 };
-	vector<uint> s2 = { 2, 3, 6, 7 };
+	vector<uint> s1 = { 10, 3, 3 };
+	vector<uint> s2 = { 9, 7, 6, 3, 2 };
 	vector<uint> dif;
-	size_t n = fasterSearchForNew1(dif, s1, s2);
+	size_t n = sortAndCompareSearchForNew(dif, s1, s2);
 	std::cout << n << "\n";
 */
 	const int sizes[] = { 10, 20, 50, 100, 200, 500, 1000, 2000, 3000, 5000, 10000, 15000, 20000, 25000, 50000, 75000, 100000 };
 	for (int i : sizes)
 	{
-		rand.seed(123);
+		rand.seed(123); // be determenistic
 		test(i, rand);
 	}
 }
