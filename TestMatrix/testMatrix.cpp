@@ -1,4 +1,5 @@
-//#define USE_AVX // will not work on pre-AVX CPUs!
+#define USE_AVX
+//#define USE_AVX512 // VS 2015 doesn't support AVX-512
 
 #include <memory>
 #include <chrono>
@@ -14,6 +15,9 @@
 using namespace std::chrono;
 
 const int TestSeconds = 2;
+
+bool useAVX = false;
+bool HW_AVX512F = false;
 
 void initMatrix(double *a, int numRows, int numColumns, double startValue, double step)
 {
@@ -78,19 +82,24 @@ void addMatricesAVX(double* sum, const double* a, const double* b, int numRows, 
 {
 	int size = numRows * numColumns;
 	int i = 0;
-/*
-	// Note we are doing as many blocks of 8 as we can.  If the size is not divisible by 8
-	// then we will have some left over that will then be performed serially.
-	// AVX-512 loop
-	for (; i < (size & ~0x7); i += 8)
-	{
-		const __m512d kA8 = _mm512_load_pd(&a[i]);
-		const __m512d kB8 = _mm512_load_pd(&b[i]);
 
-		const __m512d kRes = _mm512_add_pd(kA8, kB8);
-		_mm512_stream_pd(&sum[i], kRes);
+#ifdef USE_AVX512
+	if (HW_AVX512F)
+	{
+		// Note we are doing as many blocks of 8 as we can.  If the size is not divisible by 8
+		// then we will have some left over that will then be performed serially.
+		// AVX-512 loop
+		for (int count = (size & ~0x7); i < count; i += 8)
+		{
+			const __m512d kA8 = _mm512_load_pd(&a[i]);
+			const __m512d kB8 = _mm512_load_pd(&b[i]);
+
+			const __m512d kRes = _mm512_add_pd(kA8, kB8);
+			_mm512_stream_pd(&sum[i], kRes);
+		}
 	}
-*/
+#endif
+
 	// AVX loop
 	for (int count = (size & ~0x3); i < count; i += 4)
 	{
@@ -100,6 +109,7 @@ void addMatricesAVX(double* sum, const double* a, const double* b, int numRows, 
 		const __m256d kRes = _mm256_add_pd(kA4, kB4);
 		_mm256_stream_pd(&sum[i], kRes);
 	}
+
 /* don't mix AVX/SSE2 (performance penalty on switching)
 	// SSE2 loop
 	for (int count = (size & ~0x1); i < count; i += 2)
@@ -111,7 +121,8 @@ void addMatricesAVX(double* sum, const double* a, const double* b, int numRows, 
 		_mm_stream_pd(&sum[i], kRes);
 	}
 */
-	// Serial loop
+
+	// the rest
 	for (; i < size; i++)
 	{
 		sum[i] = a[i] + b[i];
@@ -190,10 +201,13 @@ void testMatrix(int numRows, int numColumns, int numSeries)
 	checkMatrix(sum, numRows, numColumns, firstValue + lastValue);
 
 #ifdef USE_AVX
-	// check addMatricesAVX is Ok
-	initMatrix(sum, numRows, numColumns, 0.0, 0.0);
-	addMatricesAVX(sum, a, b, numRows, numColumns);
-	checkMatrix(sum, numRows, numColumns, firstValue + lastValue);
+	if (useAVX)
+	{
+		// check addMatricesAVX is Ok
+		initMatrix(sum, numRows, numColumns, 0.0, 0.0);
+		addMatricesAVX(sum, a, b, numRows, numColumns);
+		checkMatrix(sum, numRows, numColumns, firstValue + lastValue);
+	}
 #endif
 
 	// check addMatricesByColumns is Ok
@@ -204,10 +218,14 @@ void testMatrix(int numRows, int numColumns, int numSeries)
 	// run tests
 
 #ifdef USE_AVX
-	int avx = testAddMatricesAVX(sum, a, b, numRows, numColumns, numSeries);
-	std::cout << "Number of matrix additions (AVX) per second: " << avx << std::endl;
-	std::cout << "Number of individual additions (AVX) per second: "
-		<< (int64_t)avx * numElements / 1000000 << " (x 1E6)" << std::endl;
+	int avx;
+	if (useAVX)
+	{
+		avx = testAddMatricesAVX(sum, a, b, numRows, numColumns, numSeries);
+		std::cout << "Number of matrix additions (AVX) per second: " << avx << std::endl;
+		std::cout << "Number of individual additions (AVX) per second: "
+			<< (int64_t)avx * numElements / 1000000 << " (x 1E6)" << std::endl;
+	}
 #endif
 	int byRows = testAddMatricesByRows(sum, a, b, numRows, numColumns, numSeries);
 	std::cout << "Number of matrix additions (row major) per second: " << byRows << std::endl;
@@ -224,8 +242,11 @@ void testMatrix(int numRows, int numColumns, int numSeries)
 	freeDoubleVector(sum);
 
 #ifdef USE_AVX
-	std::cout << "Ratio AVX / row major: " << std::fixed << std::setprecision(1)
-		<< (double)avx / byRows << std::endl;
+	if (useAVX)
+	{
+		std::cout << "Ratio AVX / row major: " << std::fixed << std::setprecision(1)
+			<< (double)avx / byRows << std::endl;
+	}
 #endif
 	std::cout << "Ratio row major / column major: " << std::fixed << std::setprecision(1)
 		<< (double)byRows / byColumns << std::endl;
@@ -233,8 +254,61 @@ void testMatrix(int numRows, int numColumns, int numSeries)
 	std::cout << std::endl;
 }
 
+// http://stackoverflow.com/questions/6121792/how-to-check-if-a-cpu-supports-the-sse3-instruction-set
+bool checkAVX(bool &HW_AVX, bool &HW_AVX512F)
+{
+	int info[4];
+
+	__cpuid(info, 0);
+	int nIds = info[0];
+	if (nIds == 0)
+	{
+		return false;
+	}
+
+	bool result = false;
+
+	__cpuid(info, 1);
+	bool osUsesXSAVE_XRSTORE = (info[2] & ((int)1 << 27)) != 0;
+
+	if (osUsesXSAVE_XRSTORE)
+	{
+		HW_AVX = ((info[2] & ((int)1 << 28)) != 0);
+		HW_AVX512F = (info[1] & ((int)1 << 16)) != 0;
+		if (HW_AVX)
+		{
+			unsigned long long xcrFeatureMask = _xgetbv(_XCR_XFEATURE_ENABLED_MASK);
+			result = ((xcrFeatureMask & 0x6) == 0x6);
+		}
+	}
+
+	return result;
+}
+
 void testMatrix()
 {
+#ifdef _DEBUG
+	std::cout << "Warning: debug build. Benchmark results are not sensible (use Release please)" << std::endl;
+#endif
+#ifdef USE_AVX
+	bool HW_AVX;
+	useAVX = checkAVX(HW_AVX, HW_AVX512F);
+	if (HW_AVX)
+	{
+		std::cout << "CPU supports AVX-" << (HW_AVX512F ? "512" : "256") << std::endl;
+		if (useAVX)
+		{
+#ifndef USE_AVX512
+			HW_AVX512F = false;
+#endif
+			std::cout << "Using AVX-" << (HW_AVX512F ? "512" : "256") << std::endl;
+		}
+	}
+	else
+	{
+		std::cout << "CPU doesn't support AVX" << std::endl;
+	}
+#endif
 	testMatrix(2, 2, 200);
 	testMatrix(4, 4, 150);
 	testMatrix(8, 8, 100);

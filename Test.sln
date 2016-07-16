@@ -3,8 +3,6 @@ Microsoft Visual Studio Solution File, Format Version 12.00
 # Visual Studio 14
 VisualStudioVersion = 14.0.25123.0
 MinimumVisualStudioVersion = 10.0.40219.1
-Project("{8BC9CEB8-8B4A-11D0-8D11-00A0C91BC942}") = "lesson1", "lesson1.vcxproj", "{92401B1C-4A28-4B21-BFE4-5FD22C427FFE}"
-EndProject
 Project("{8BC9CEB8-8B4A-11D0-8D11-00A0C91BC942}") = "TestMatrix", "TestMatrix\TestMatrix.vcxproj", "{574F06A3-1D3C-4880-9742-D496D95AC68F}"
 EndProject
 Project("{8BC9CEB8-8B4A-11D0-8D11-00A0C91BC942}") = "TestCompare", "TestCompare\TestCompare.vcxproj", "{D20E787C-41F6-47C0-AA54-EF2BC1F18B07}"
@@ -17,14 +15,6 @@ Global
 		Release|x86 = Release|x86
 	EndGlobalSection
 	GlobalSection(ProjectConfigurationPlatforms) = postSolution
-		{92401B1C-4A28-4B21-BFE4-5FD22C427FFE}.Debug|x64.ActiveCfg = Debug|x64
-		{92401B1C-4A28-4B21-BFE4-5FD22C427FFE}.Debug|x64.Build.0 = Debug|x64
-		{92401B1C-4A28-4B21-BFE4-5FD22C427FFE}.Debug|x86.ActiveCfg = Debug|Win32
-		{92401B1C-4A28-4B21-BFE4-5FD22C427FFE}.Debug|x86.Build.0 = Debug|Win32
-		{92401B1C-4A28-4B21-BFE4-5FD22C427FFE}.Release|x64.ActiveCfg = Release|x64
-		{92401B1C-4A28-4B21-BFE4-5FD22C427FFE}.Release|x64.Build.0 = Release|x64
-		{92401B1C-4A28-4B21-BFE4-5FD22C427FFE}.Release|x86.ActiveCfg = Release|Win32
-		{92401B1C-4A28-4B21-BFE4-5FD22C427FFE}.Release|x86.Build.0 = Release|Win32
 		{574F06A3-1D3C-4880-9742-D496D95AC68F}.Debug|x64.ActiveCfg = Debug|x64
 		{574F06A3-1D3C-4880-9742-D496D95AC68F}.Debug|x64.Build.0 = Debug|x64
 		{574F06A3-1D3C-4880-9742-D496D95AC68F}.Debug|x86.ActiveCfg = Debug|Win32

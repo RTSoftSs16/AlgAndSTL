@@ -81,7 +81,7 @@ size_t sortAndCompareSearchForNew(vector<uint> &dif, const vector<uint> &_s1, co
 				{
 					move1 = true;
 				}
-				else if (!endOf2) // endOf1 && !endOf2: can copy the rest of s2 and stop
+				else if (!endOf2) // endOf1 && !endOf2: copy the rest of s2 and stop
 				{
 					std::copy(s2.begin() + i2, s2.end(), std::back_inserter(dif));
 					break;
@@ -89,7 +89,7 @@ size_t sortAndCompareSearchForNew(vector<uint> &dif, const vector<uint> &_s1, co
 			}
 			else // cur1 > cur2
 			{
-				if (endOf2)
+				if (endOf2) // stop
 				{
 					break;
 				}
@@ -161,7 +161,7 @@ std::pair<double, size_t> test(
 	return std::pair<double, size_t>(timePassed, counter);
 }
 
-static void test(size_t n, minstd_rand &rand)
+void test(size_t n, minstd_rand &rand)
 {
 	std::cout << "N=" << n << std::endl;
 
@@ -219,13 +219,16 @@ static void test(size_t n, minstd_rand &rand)
 	}
 }
 
-void lesson1()
+void testCompare()
 {
+#ifdef _DEBUG
+	std::cout << "Warning: debug build. Benchmark results are not sensible (use Release please)" << std::endl;
+#endif
 	minstd_rand rand;
 /*
 	rand.seed(123);
-	vector<uint> s1 = { 10, 3, 3 };
-	vector<uint> s2 = { 9, 7, 6, 3, 2 };
+	vector<uint> s1 = { 3, 10, 3 };
+	vector<uint> s2 = { 7, 9, 3, 6, 2 };
 	vector<uint> dif;
 	size_t n = sortAndCompareSearchForNew(dif, s1, s2);
 	std::cout << n << "\n";
