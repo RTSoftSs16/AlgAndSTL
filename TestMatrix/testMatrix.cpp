@@ -8,6 +8,7 @@
 #include <cmath>
 
 #ifdef USE_AVX
+#include <intrin.h>
 #include <immintrin.h>
 #include <malloc.h>
 #endif
